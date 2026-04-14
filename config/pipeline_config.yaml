@@ -1,0 +1,374 @@
+# scRNA-seq Pipeline Configuration
+# Version: 1.0
+# Date: 2026-04-14
+
+# ============================================================================
+# 项目配置
+# ============================================================================
+
+project:
+  name: "scRNA-seq Analysis Pipeline"
+  version: "1.0"
+  description: "Complete single-cell RNA-seq analysis workflow"
+  author: "Cline AI Assistant"
+  date: "2026-04-14"
+
+# ============================================================================
+# 数据输入配置
+# ============================================================================
+
+input:
+  # 输入格式
+  formats:
+    - "10x Genomics (Cell Ranger output)"
+    - "Seurat RDS files"
+    - "Scanpy AnnData files"
+    - "CSV/TSV expression matrices"
+  
+  # 默认输入目录结构
+  directory_structure:
+    raw_data: "data/raw/"
+    processed_data: "data/processed/"
+    reference: "data/reference/"
+    results: "results/"
+    logs: "logs/"
+
+# ============================================================================
+# 质量控制配置
+# ============================================================================
+
+quality_control:
+  # 物种特定配置
+  species:
+    arabidopsis:
+      mitochondrial_pattern: "^ATMG|^ATCG"
+      chloroplast_pattern: "^ATCG"
+      filtering:
+        nFeature_RNA_min: 200
+        nFeature_RNA_max: 6000
+        nCount_RNA_min: 500
+        nCount_RNA_max: 30000
+        percent_mt_max: 5
+        percent_chloro_max: 5
+    
+    human:
+      mitochondrial_pattern: "^MT-"
+      chloroplast_pattern: null
+      filtering:
+        nFeature_RNA_min: 200
+        nFeature_RNA_max: 6000
+        nCount_RNA_min: 500
+        nCount_RNA_max: 30000
+        percent_mt_max: 10
+    
+    mouse:
+      mitochondrial_pattern: "^mt-"
+      chloroplast_pattern: null
+      filtering:
+        nFeature_RNA_min: 200
+        nFeature_RNA_max: 6000
+        nCount_RNA_min: 500
+        nCount_RNA_max: 30000
+        percent_mt_max: 10
+    
+    grape:
+      mitochondrial_pattern: "^VIT_MT|^MT-|^mt-"
+      chloroplast_pattern: "^VIT_CP|^Cp-|^CHLORO"
+      filtering:
+        nFeature_RNA_min: 180
+        nFeature_RNA_max: 5000
+        nCount_RNA_min: 200
+        nCount_RNA_max: 20000
+        percent_mt_max: 5
+        percent_chloro_max: 10  # 光合组织可放宽
+  
+  # 通用过滤阈值
+  default_filtering:
+    nFeature_RNA_min: 200
+    nFeature_RNA_max: 6000
+    nCount_RNA_min: 500
+    nCount_RNA_max: 30000
+    percent_mt_max: 10
+    percent_ribo_max: 50
+
+# ============================================================================
+# 分析模块配置
+# ============================================================================
+
+analysis_modules:
+  # 模块1: 数据加载与质量控制
+  module_01:
+    name: "Data Loading and QC"
+    script: "scripts/01_data_loading_qc.R"
+    description: "Load single-cell data and perform quality control filtering"
+    output:
+      - "seurat_filtered.rds"
+      - "cell_metadata.csv"
+      - "qc_statistics.txt"
+      - "qc_plots/"
+  
+  # 模块2: 标准化与特征选择
+  module_02:
+    name: "Normalization and Feature Selection"
+    script: "scripts/02_normalization_feature_selection.R"
+    description: "Normalize data and select highly variable features"
+    output:
+      - "seurat_normalized.rds"
+      - "variable_features.txt"
+      - "normalization_report.txt"
+  
+  # 模块3: 降维与聚类
+  module_03:
+    name: "Dimensionality Reduction and Clustering"
+    script: "scripts/03_dimension_reduction_clustering.R"
+    description: "Perform PCA, UMAP/t-SNE and cell clustering"
+    parameters:
+      pca_dims: 30
+      umap_dims: 30
+      clustering_resolution: 0.5
+    output:
+      - "seurat_clustered.rds"
+      - "pca_results.csv"
+      - "umap_coordinates.csv"
+      - "cluster_assignments.csv"
+  
+  # 模块4: 标记基因识别
+  module_04:
+    name: "Marker Gene Identification"
+    script: "scripts/04_marker_gene_identification.R"
+    description: "Identify cluster-specific marker genes"
+    parameters:
+      min_pct: 0.25
+      logfc_threshold: 0.25
+      only_pos: true
+    output:
+      - "marker_genes.csv"
+      - "top_markers_per_cluster.csv"
+      - "marker_gene_plots/"
+  
+  # 模块5-9: 注释模块
+  annotation_modules:
+    - name: "AUCell Annotation"
+      script: "scripts/05_aucell_annotation.R"
+      description: "Cell type annotation using AUCell"
+    
+    - name: "PCMaster Annotation"
+      script: "scripts/06_pcmaster_annotation.R"
+      description: "Cell type annotation using PCMaster"
+    
+    - name: "scPlantAnnotate"
+      script: "scripts/07_scplantannotate_annotation.R"
+      description: "Plant-specific cell type annotation"
+    
+    - name: "Integrated Scoring"
+      script: "scripts/08_integrated_scoring.R"
+      description: "Combine multiple annotation methods"
+    
+    - name: "Cell Type Naming"
+      script: "scripts/09_celltype_naming.R"
+      description: "Final cell type naming and assignment"
+
+# ============================================================================
+# 软件依赖配置
+# ============================================================================
+
+dependencies:
+  # R包依赖
+  r_packages:
+    core:
+      - "Seurat>=4.0"
+      - "ggplot2"
+      - "dplyr"
+      - "patchwork"
+      - "Matrix"
+    
+    bioconductor:
+      - "AUCell"
+      - "SingleCellExperiment"
+      - "scater"
+      - "scran"
+      - "scDblFinder"
+    
+    optional:
+      - "harmony"
+      - "igraph"
+      - "viridis"
+      - "RColorBrewer"
+  
+  # Python包依赖
+  python_packages:
+    core:
+      - "scanpy>=1.9"
+      - "pandas"
+      - "numpy"
+      - "matplotlib"
+      - "scikit-learn"
+    
+    optional:
+      - "leidenalg"
+      - "bbknn"
+      - "magic-impute"
+      - "scvelo"
+  
+  # 系统工具
+  system_tools:
+    required:
+      - "R>=4.0"
+      - "python>=3.8"
+    optional:
+      - "cellranger"  # 10x Genomics
+      - "starsolo"    # STARsolo aligner
+
+# ============================================================================
+# 输出配置
+# ============================================================================
+
+output:
+  # 目录结构
+  directories:
+    qc: "results/qc/"
+    clustering: "results/clustering/"
+    markers: "results/markers/"
+    annotation: "results/annotation/"
+    visualization: "results/visualization/"
+    reports: "results/reports/"
+  
+  # 文件格式
+  formats:
+    r_objects: ".rds"
+    python_objects: ".h5ad"
+    tables: ".csv"
+    plots: ".png"
+    reports: ".html"
+  
+  # 报告生成
+  reports:
+    qc_report: true
+    clustering_report: true
+    marker_report: true
+    annotation_report: true
+    summary_report: true
+
+# ============================================================================
+# 性能配置
+# ============================================================================
+
+performance:
+  # 内存设置
+  memory:
+    default: "8G"
+    large_dataset: "16G"
+    very_large: "32G"
+  
+  # 并行处理
+  parallel:
+    enabled: true
+    max_workers: 4
+    backend: "multiprocessing"
+  
+  # 缓存设置
+  caching:
+    enabled: true
+    cache_dir: ".cache/"
+    max_cache_size: "10GB"
+
+# ============================================================================
+# 验证配置
+# ============================================================================
+
+validation:
+  # 数据质量检查
+  quality_checks:
+    - "cell_count > 1000"
+    - "gene_count > 500"
+    - "mitochondrial_percentage < 10"
+    - "doublet_rate < 10"
+  
+  # 分析完整性检查
+  completeness_checks:
+    - "qc_complete"
+    - "normalization_complete"
+    - "clustering_complete"
+    - "annotation_complete"
+  
+  # 输出文件检查
+  output_checks:
+    - "required_files_exist"
+    - "file_sizes_reasonable"
+    - "plots_generated"
+
+# ============================================================================
+# 日志配置
+# ============================================================================
+
+logging:
+  # 日志级别
+  level: "INFO"
+  levels:
+    - "DEBUG"
+    - "INFO"
+    - "WARNING"
+    - "ERROR"
+    - "CRITICAL"
+  
+  # 日志文件
+  files:
+    main: "logs/pipeline.log"
+    qc: "logs/qc.log"
+    analysis: "logs/analysis.log"
+    errors: "logs/errors.log"
+  
+  # 日志格式
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+# ============================================================================
+# 使用说明
+# ============================================================================
+
+usage:
+  quick_start: |
+    # 1. 安装依赖
+    Rscript install_dependencies.R
+    
+    # 2. 运行完整流程
+    ./run_pipeline.sh --input data/input.rds --output results/
+  
+  modular_usage: |
+    # 分模块运行
+    Rscript scripts/01_data_loading_qc.R data/input.rds results/
+    Rscript scripts/02_normalization_feature_selection.R results/seurat_filtered.rds results/
+    Rscript scripts/03_dimension_reduction_clustering.R results/seurat_normalized.rds results/
+  
+  configuration: |
+    # 修改配置
+    # 1. 编辑 config/pipeline_config.yaml
+    # 2. 调整物种特定参数
+    # 3. 设置输出目录
+  
+  troubleshooting: |
+    # 常见问题
+    # 1. 内存不足: 增加内存设置
+    # 2. 包冲突: 使用虚拟环境
+    # 3. 文件格式: 检查输入文件格式
+
+# ============================================================================
+# 版本信息
+# ============================================================================
+
+version_info:
+  current: "1.0"
+  changelog:
+    "1.0":
+      date: "2026-04-14"
+      changes:
+        - "初始版本发布"
+        - "包含9个核心分析模块"
+        - "支持多种物种配置"
+        - "完整的质控和注释流程"
+  
+  compatibility:
+    r_version: ">=4.0.0"
+    python_version: ">=3.8.0"
+    seurat_version: ">=4.0.0"
+    scanpy_version: ">=1.9.0"
